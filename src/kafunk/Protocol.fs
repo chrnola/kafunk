@@ -523,11 +523,8 @@ module Protocol =
       let numRecords = buf.ReadInt32()
       let records = Array.zeroCreate numRecords
 
-      // HACK
-      let adjFactor = 2L
-
       for i = 0 to records.Length - 1 do
-        let recordLength = buf.ReadVarint() / adjFactor |> int32
+        let recordLength = buf.ReadVarint() |> int32
         do buf.ShiftOffset 1 // Record attributes (int8, unused)
         let timestampDelta = buf.ReadVarint()
         let offsetDelta = buf.ReadVarint()

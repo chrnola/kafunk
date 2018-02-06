@@ -418,7 +418,8 @@ type BinaryZipper (buf:ArraySegment<byte>) =
       result <- result ||| (int64 valueToShiftIntoResult <<< shiftBy)
       shiftBy <- shiftBy + 7
 
-    result
+    // BUG: Kafka is currently doubling all varints?
+    result / 2L
 
   member __.WriteBytes (bytes:ArraySegment<byte>) =
     if isNull bytes.Array then
@@ -440,9 +441,6 @@ type BinaryZipper (buf:ArraySegment<byte>) =
 
   member __.ReadVarintBytes () : ArraySegment<byte> =
     let length = __.ReadVarint () |> int
-
-    // HACK
-    let length = length / 2
 
     if length = -1 then
       ArraySegment<byte>(buf.Array, buf.Offset, 0)
