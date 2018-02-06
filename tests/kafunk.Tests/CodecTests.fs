@@ -112,6 +112,84 @@ let ``FetchResponse.read should decode FetchResponse``() =
   Assert.AreEqual(1940715388, int m.crc)
   Assert.AreEqual("hello world", (m.value |> Binary.toString))
 
+[<Test>]
+let ``FetchResponse.read should decode FetchResponse API version 2``() =
+
+    let v2ReponseData =
+        Binary.ofArray [|
+            0uy;0uy;0uy;0uy         // throttle_time_ms (0ms)
+            0uy;0uy;0uy;1uy         // response array size (1 topic)
+            0uy;4uy                 // topic #1 name length (4 chars)
+            116uy;101uy;115uy;116uy // 't' 'e' 's' 't'
+            0uy;0uy;0uy;1uy         // topics[0] partition array size (1 partition)
+            0uy;0uy;0uy;1uy         // topics[0].partition[0].partition (#1)
+            0uy;0uy                 // topics[0].partition[0].error code (0)
+            0uy;0uy;0uy;0uy;0uy;0uy;6uy;95uy // topics[0].partition[0].highwatermark (1631)
+            0uy;0uy;1uy;64uy;       // "message set size"
+            0uy;0uy;0uy;0uy;0uy;0uy;0uy;64uy; // offset
+            0uy;0uy;114uy;181uy     // RecordBatch.Length
+            0uy;0uy;1uy;4uy         // RecordBatch.Partition Leader Epoch
+            2uy                     // Magic byte
+            0uy;0uy;0uy;0uy         // CRC32 sum TODO
+            0uy;8uy                 // batch attributes
+            0uy;0uy;0uy;0uy         // last offset delta
+            255uy;255uy;255uy;255uy;255uy;255uy;255uy;255uy // first timestamp
+            255uy;255uy;255uy;255uy;255uy;255uy;255uy;255uy // max timestamp
+            255uy;255uy;255uy;255uy;255uy;255uy;255uy;255uy // producer ID
+            255uy;255uy // producer epoch
+            255uy;255uy;255uy;255uy // first sequence
+            0uy;0uy;0uy;1uy         // number of records
+            130uy;4uy               // record length
+            0uy                     // record attributes
+            0uy                     // timestamp delta
+            0uy                     // offset delta
+            70uy                    // key length
+            0x31uy;0x30uy;0x36uy;0x30uy;0x31uy;0x30uy;0x63uy;0x65uy;0x38uy;0x66uy;0x66uy
+            0x36uy;0x34uy;0x35uy;0x39uy;0x66uy;0x62uy;0x37uy;0x63uy;0x66uy;0x34uy;0x37uy
+            0x64uy;0x34uy;0x32uy;0x35uy;0x31uy;0x33uy;0x38uy;0x30uy;0x64uy;0x31uy;0x3auy
+            0x32uy;0x31uy           // key (retail SKU ID : 21)
+            0xAEuy;0x03uy           // message length
+            0x7buy;0x22uy;0x72uy;0x65uy;0x74uy;0x61uy;0x69uy;0x6cuy;0x53uy;0x6buy;0x75uy
+            0x49uy;0x64uy;0x22uy;0x3auy;0x22uy;0x31uy;0x30uy;0x36uy;0x30uy;0x31uy;0x30uy
+            0x63uy;0x65uy;0x38uy;0x66uy;0x66uy;0x36uy;0x34uy;0x35uy;0x39uy;0x66uy;0x62uy
+            0x37uy;0x63uy;0x66uy;0x34uy;0x37uy;0x64uy;0x34uy;0x32uy;0x35uy;0x31uy;0x33uy
+            0x38uy;0x30uy;0x64uy;0x31uy;0x22uy;0x2cuy;0x22uy;0x6duy;0x61uy;0x72uy;0x74uy
+            0x49uy;0x64uy;0x22uy;0x3auy;0x32uy;0x31uy;0x2cuy;0x22uy;0x72uy;0x65uy;0x63uy
+            0x61uy;0x6cuy;0x63uy;0x75uy;0x6cuy;0x61uy;0x74uy;0x69uy;0x6fuy;0x6euy;0x54uy
+            0x68uy;0x72uy;0x65uy;0x73uy;0x68uy;0x6fuy;0x6cuy;0x64uy;0x22uy;0x3auy;0x30uy
+            0x2cuy;0x22uy;0x74uy;0x69uy;0x6duy;0x65uy;0x73uy;0x74uy;0x61uy;0x6duy;0x70uy
+            0x22uy;0x3auy;0x22uy;0x32uy;0x30uy;0x31uy;0x38uy;0x2duy;0x30uy;0x32uy;0x2duy
+            0x30uy;0x32uy;0x54uy;0x32uy;0x32uy;0x3auy;0x30uy;0x36uy;0x3auy;0x31uy;0x37uy
+            0x5auy;0x22uy;0x2cuy;0x22uy;0x72uy;0x65uy;0x61uy;0x73uy;0x6fuy;0x6euy;0x22uy
+            0x3auy;0x22uy;0x45uy;0x76uy;0x65uy;0x6euy;0x74uy;0x22uy;0x2cuy;0x22uy;0x63uy
+            0x6fuy;0x6duy;0x6duy;0x65uy;0x6euy;0x74uy;0x22uy;0x3auy;0x22uy;0x52uy;0x65uy
+            0x70uy;0x72uy;0x69uy;0x63uy;0x65uy;0x20uy;0x61uy;0x6cuy;0x6cuy;0x20uy;0x66uy
+            0x72uy;0x6fuy;0x6duy;0x20uy;0x4euy;0x6fuy;0x76uy;0x61uy;0x22uy;0x2cuy;0x22uy
+            0x69uy;0x64uy;0x22uy;0x3auy;0x22uy;0x66uy;0x65uy;0x62uy;0x37uy;0x30uy;0x66uy
+            0x63uy;0x32uy;0x65uy;0x65uy;0x61uy;0x31uy;0x34uy;0x32uy;0x66uy;0x39uy;0x39uy
+            0x66uy;0x30uy;0x34uy;0x62uy;0x38uy;0x63uy;0x32uy;0x39uy;0x38uy;0x36uy;0x31uy
+            0x61uy;0x34uy;0x62uy;0x30uy;0x22uy;0x7duy  // message
+            0uy                     // headers length TODO parse this!
+        |]
+        |> BinaryZipper
+
+    let res = FetchResponse.Read (2s, v2ReponseData)
+    let (topicName, topicData) = res.topics.[0]
+    let (partition, errorCode, highWatermark, _, _, _, messageSetSize, messageSet) = topicData.[0]
+    let x = messageSet.messages.[0]
+
+    Assert.AreEqual(0, res.throttleTime)
+    Assert.AreEqual(1, res.topics.Length)
+    Assert.AreEqual(1, topicData.Length)
+    Assert.AreEqual("test", topicName)
+    Assert.AreEqual(1, partition)
+    Assert.AreEqual(0, errorCode)
+    Assert.AreEqual(1631, highWatermark)
+    Assert.AreEqual(320, messageSetSize)
+
+    Assert.AreEqual(64, x.offset)
+    Assert.AreEqual(215, x.message.value.Count)
+
 //[<Test>]
 //let ``FetchResponse.read should decode partial FetchResponse`` () =
 //  let data = FetchResponseBinary

@@ -509,7 +509,36 @@ module Protocol =
           buf.ShiftOffset messageSetRemainder
         consumed <- consumed + (buf.Buffer.Offset - o')
       MessageSet(arr.ToArray())
-  
+
+    static member internal ReadFromRecordBatch (recordBatchSize:int, buf:BinaryZipper) =
+      let firstOffset = buf.ReadInt64()
+      do buf.ShiftOffset 8 // Length (int32) + PartitionLeaderEpoch (int32)
+      let magicByte = buf.ReadInt8()
+      let crcSum = buf.ReadInt32()
+      let _batchAttributes = buf.ReadInt16()
+      let _lastOffsetDelta = buf.ReadInt32()
+      let firstTimestamp = buf.ReadInt64()
+      let _maxTimestamp = buf.ReadInt64()
+      do buf.ShiftOffset 14 // producer ID (int64) + producer epoch (int16) + first sequence (int32)
+      let numRecords = buf.ReadInt32()
+      let records = Array.zeroCreate numRecords
+
+      // HACK
+      let adjFactor = 2L
+
+      for i = 0 to records.Length - 1 do
+        let recordLength = buf.ReadVarint() / adjFactor |> int32
+        do buf.ShiftOffset 1 // Record attributes (int8, unused)
+        let timestampDelta = buf.ReadVarint()
+        let offsetDelta = buf.ReadVarint()
+        let key = buf.ReadVarintBytes()
+        let value = buf.ReadVarintBytes()
+
+        let message = Message(-1 (*crc*), magicByte, 0y (*attr*), firstTimestamp + timestampDelta, key, value)
+        records.[i] <- MessageSetItem(firstOffset + offsetDelta, recordLength, message)
+
+      MessageSet(records)
+
     static member CheckCrc (ver:ApiVersion, ms:MessageSet) =
       //for (_,_,m) in ms.messages do
       for x in ms.messages do
@@ -855,7 +884,12 @@ module Protocol =
             else
               null
           let messageSetSize = buf.ReadInt32 ()
-          let messageSet = MessageSet.Read (MessageVersions.fetchResMessage ver,partition,errorCode,messageSetSize,false,buf)
+          let magicByte = buf.PeekIn8Offset 16
+          let messageSet =
+            if magicByte < 2y then
+              MessageSet.Read (MessageVersions.fetchResMessage ver,partition,errorCode,messageSetSize,false,buf)
+            else
+              MessageSet.ReadFromRecordBatch (messageSetSize, buf)
           partitions.[j] <-  partition, errorCode, highWatermark, lastStableOffset, logStartOffset, abortedTxns, messageSetSize, messageSet
         topics.[i] <- (topic,partitions)
       let res = FetchResponse(throttleTime, topics)
