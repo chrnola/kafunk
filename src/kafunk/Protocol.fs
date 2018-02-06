@@ -531,6 +531,9 @@ module Protocol =
         let key = buf.ReadVarintBytes()
         let value = buf.ReadVarintBytes()
 
+        // TODO: Parse this instaed of skipping/assuming it's empty
+        do buf.ShiftOffset 1 // Headers array
+
         let message = Message(-1 (*crc*), magicByte, 0y (*attr*), firstTimestamp + timestampDelta, key, value)
         records.[i] <- MessageSetItem(firstOffset + offsetDelta, recordLength, message)
 
