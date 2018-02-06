@@ -511,6 +511,7 @@ module Protocol =
       MessageSet(arr.ToArray())
 
     static member internal ReadFromRecordBatch (recordBatchSize:int, buf:BinaryZipper) =
+      let arr = ResizeArray<_>()
       let mutable consumed = 0
       let o = buf.Buffer.Offset
 
@@ -523,32 +524,36 @@ module Protocol =
       let firstTimestamp = buf.ReadInt64()
       let _maxTimestamp = buf.ReadInt64()
       do buf.ShiftOffset 14 // producer ID (int64) + producer epoch (int16) + first sequence (int32)
-      let numRecords = buf.ReadInt32()
+      let numRecords = buf.ReadInt32() // Note the response isn't guaranteed to contain every record in this count!
       consumed <- consumed + (buf.Buffer.Offset - o)
 
-      let records = Array.zeroCreate numRecords
-
-      for i = 0 to records.Length - 1 do
+      while consumed < recordBatchSize && buf.Buffer.Count > 0 do
         let o = buf.Buffer.Offset
         let recordLength = buf.ReadVarint() |> int32
-        let o' = buf.Buffer.Offset
+        let recordStart = buf.Buffer.Offset
 
-        do buf.ShiftOffset 1 // Record attributes (int8, unused)
-        let timestampDelta = buf.ReadVarint()
-        let offsetDelta = buf.ReadVarint()
-        let key = buf.ReadVarintBytes()
-        let value = buf.ReadVarintBytes()
+        if recordLength > buf.Buffer.Count then
+          // Response does not contain a full message! Skip to the end.
+          buf.ShiftOffset buf.Buffer.Count
+        else
+          let recordAttrributes = buf.ReadInt8()
+          let timestampDelta = buf.ReadVarint()
+          let offsetDelta = buf.ReadVarint()
+          let key = buf.ReadVarintBytes()
+          let value = buf.ReadVarintBytes()
 
-        let remainder = recordLength - (buf.Buffer.Offset - o')
-        if remainder > 0 then
-          // Ignore headers for now
-          buf.ShiftOffset remainder
+          let remainder = recordLength - (buf.Buffer.Offset - recordStart)
+          if remainder > 0 then
+            // Ignore headers for now
+            buf.ShiftOffset remainder
 
-        let message = Message(-1 (*crc*), magicByte, 0y (*attr*), firstTimestamp + timestampDelta, key, value)
-        records.[i] <- MessageSetItem(firstOffset + offsetDelta, recordLength, message)
-        consumed <- consumed + (buf.Buffer.Offset - o)
+          let offset = firstOffset + offsetDelta
+          let timestamp = firstTimestamp + timestampDelta
+          let message = Message(-1 (*crc*), magicByte, recordAttrributes, timestamp, key, value)
+          arr.Add (MessageSetItem(offset, recordLength, message))
+          consumed <- consumed + (buf.Buffer.Offset - o)
 
-      MessageSet(records)
+      MessageSet(arr.ToArray())
 
     static member CheckCrc (ver:ApiVersion, ms:MessageSet) =
       //for (_,_,m) in ms.messages do
