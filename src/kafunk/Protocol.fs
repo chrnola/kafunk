@@ -511,6 +511,9 @@ module Protocol =
       MessageSet(arr.ToArray())
 
     static member internal ReadFromRecordBatch (recordBatchSize:int, buf:BinaryZipper) =
+      let mutable consumed = 0
+      let o = buf.Buffer.Offset
+
       let firstOffset = buf.ReadInt64()
       do buf.ShiftOffset 8 // Length (int32) + PartitionLeaderEpoch (int32)
       let magicByte = buf.ReadInt8()
@@ -521,21 +524,29 @@ module Protocol =
       let _maxTimestamp = buf.ReadInt64()
       do buf.ShiftOffset 14 // producer ID (int64) + producer epoch (int16) + first sequence (int32)
       let numRecords = buf.ReadInt32()
+      consumed <- consumed + (buf.Buffer.Offset - o)
+
       let records = Array.zeroCreate numRecords
 
       for i = 0 to records.Length - 1 do
+        let o = buf.Buffer.Offset
         let recordLength = buf.ReadVarint() |> int32
+        let o' = buf.Buffer.Offset
+
         do buf.ShiftOffset 1 // Record attributes (int8, unused)
         let timestampDelta = buf.ReadVarint()
         let offsetDelta = buf.ReadVarint()
         let key = buf.ReadVarintBytes()
         let value = buf.ReadVarintBytes()
 
-        // TODO: Parse this instaed of skipping/assuming it's empty
-        do buf.ShiftOffset 1 // Headers array
+        let remainder = recordLength - (buf.Buffer.Offset - o')
+        if remainder > 0 then
+          // Ignore headers for now
+          buf.ShiftOffset remainder
 
         let message = Message(-1 (*crc*), magicByte, 0y (*attr*), firstTimestamp + timestampDelta, key, value)
         records.[i] <- MessageSetItem(firstOffset + offsetDelta, recordLength, message)
+        consumed <- consumed + (buf.Buffer.Offset - o)
 
       MessageSet(records)
 
