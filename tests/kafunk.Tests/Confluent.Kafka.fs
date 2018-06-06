@@ -171,9 +171,10 @@ type Config = {
   /// - max.inflight = 1
   /// - acks = all
   static member SafeProducer = 
+    let all = -1
     Config.Empty
     |> Config.withMaxInFlight 1
-    |> Config.withRequiredAcks "all"
+    |> Config.withRequiredAcks all
     |> Config.withConfig "produce.offset.report" true
 
   static member withBootstrapServers = Config.withConfig<string> "bootstrap.servers"  
@@ -195,7 +196,7 @@ type Config = {
   // producers
   
   static member withLingerMs = Config.withConfig<int> "linger.ms"
-  static member withRequiredAcks x c = Config.withConfig<string> "acks" x c
+  static member withRequiredAcks x c = Config.withConfig<int> "acks" x c
   static member withBatchNumMessages = Config.withConfig<int> "batch.num.messages"
   static member withCompression = Config.withConfig<string> "compression.codec"
   static member withRequestTimeoutMs = Config.withConfig<int> "request.timeout.ms"
