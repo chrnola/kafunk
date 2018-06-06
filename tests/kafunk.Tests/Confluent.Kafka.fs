@@ -527,17 +527,20 @@ module Consumer =
   /// The handler is called sequentially within a partition and in parallel across partitions.
   /// Offsets are commited periodically at the specified interval.
   /// @commitIntervalMs - the offset commit interval.
+  /// @commitCallback - a callback function that is invoked when enqueued offsets are committed.
   /// @pollTimeoutMs - the consumer poll timeout.
   /// @batchLingerMs - the time to wait to form a per-partition batch; when time limit is reached the handler is called.
   /// @batchSize - the per-partition batch size limit; when the limit is reached, the handler is called.
   let consumeCommitInterval
     (c:Consumer) 
     (commitIntervalMs:int)
+    (commitCallback:CommittedOffsets -> unit)
     (pollTimeoutMs:int)
     (batchLingerMs:int) 
     (batchSize:int) 
     (handle:ConsumerMessageSet -> Async<unit>) : Async<unit> =
     let q = OffsetCommitQueue.start c commitIntervalMs
+    do Event.add commitCallback q.OnOffsetsCommitted
     consumeCommitQueue c q pollTimeoutMs batchLingerMs batchSize handle
 
   // -------------------------------------------------------------------------------------------------
